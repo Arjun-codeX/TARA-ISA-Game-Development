@@ -1,0 +1,371 @@
+; TARA16 analog clock - complete revised compact version
+; Starts at 10:10:00 to separate all three hands.
+; Second radius 24; minute approximately 18; hour approximately 9.
+; 60 second positions, 60 minute positions, 12 hour positions.
+; Fixed outer dots. Selective hand erasure. No stack or HLT.
+; Simulation ticks are not calibrated wall-clock seconds.
+; Source-level checked, NOT assembled or executed in TARA Studio here.
+; R7 state base 0400; masks 0430; quarter vectors 0440..045F.
+        JMP START
+START:
+        LIL R7, 0
+        LIH R7, 4
+
+        ; Initial time = 12:00:00
+        LIL R0, 0
+        STW R0, 0(R7)       ; Seconds = 0
+        STW R0, 2(R7)       ; Minutes = 0
+        STW R0, 4(R7)       ; Hours = 0 (12 o'clock)
+        LIL R0, 1
+        STW R0, 24(R7)
+        LIL R0, 0x30
+        LIH R0, 4
+        LIL R1, 128
+        STB R1, 0(R0)
+        LIL R1, 64
+        STB R1, 1(R0)
+        LIL R1, 32
+        STB R1, 2(R0)
+        LIL R1, 16
+        STB R1, 3(R0)
+        LIL R1, 8
+        STB R1, 4(R0)
+        LIL R1, 4
+        STB R1, 5(R0)
+        LIL R1, 2
+        STB R1, 6(R0)
+        LIL R1, 1
+        STB R1, 7(R0)
+        LIL R0, 0x40
+        LIH R0, 4
+        LIL R1, 0
+        STB R1, 0(R0)
+        LIL R1, 24
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 3
+        STB R1, 0(R0)
+        LIL R1, 24
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 5
+        STB R1, 0(R0)
+        LIL R1, 23
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 7
+        STB R1, 0(R0)
+        LIL R1, 23
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 10
+        STB R1, 0(R0)
+        LIL R1, 22
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 12
+        STB R1, 0(R0)
+        LIL R1, 21
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 14
+        STB R1, 0(R0)
+        LIL R1, 19
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 16
+        STB R1, 0(R0)
+        LIL R1, 18
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 18
+        STB R1, 0(R0)
+        LIL R1, 16
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 19
+        STB R1, 0(R0)
+        LIL R1, 14
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 21
+        STB R1, 0(R0)
+        LIL R1, 12
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 22
+        STB R1, 0(R0)
+        LIL R1, 10
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 23
+        STB R1, 0(R0)
+        LIL R1, 7
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 23
+        STB R1, 0(R0)
+        LIL R1, 5
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 24
+        STB R1, 0(R0)
+        LIL R1, 3
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R1, 24
+        STB R1, 0(R0)
+        LIL R1, 0
+        STB R1, 1(R0)
+        ADDI R0, 2
+        LIL R0, 0
+        LIH R0, 6
+        LIL R1, 0
+        LIH R1, 2
+        LIL R2, 0
+CLEAR:
+        STB R2, 0(R0)
+        ADDI R0, 1
+        ADDI R1, -1
+        BZ R1, FACE
+        JMP CLEAR
+FACE:
+        LIL R0, 32
+        LIL R1, 60
+        CALL PIXEL
+        LIL R0, 46
+        LIL R1, 56
+        CALL PIXEL
+        LIL R0, 56
+        LIL R1, 46
+        CALL PIXEL
+        LIL R0, 60
+        LIL R1, 32
+        CALL PIXEL
+        LIL R0, 56
+        LIL R1, 18
+        CALL PIXEL
+        LIL R0, 46
+        LIL R1, 8
+        CALL PIXEL
+        LIL R0, 32
+        LIL R1, 4
+        CALL PIXEL
+        LIL R0, 18
+        LIL R1, 8
+        CALL PIXEL
+        LIL R0, 8
+        LIL R1, 18
+        CALL PIXEL
+        LIL R0, 4
+        LIL R1, 32
+        CALL PIXEL
+        LIL R0, 8
+        LIL R1, 46
+        CALL PIXEL
+        LIL R0, 18
+        LIL R1, 56
+        CALL PIXEL
+LOOP:
+        LIL R0, 1
+        STW R0, 24(R7)
+        CALL THREE_HANDS
+        LIL R3, 0
+        LIH R3, 1
+WAIT:
+        ADDI R3, -1
+        BZ R3, ERASE
+        JMP WAIT
+ERASE:
+        LIL R0, 0
+        STW R0, 24(R7)
+        LDW R2, 0(R7)
+        LIL R5, 0
+        CALL HAND
+        LDW R0, 0(R7)
+        LIL R1, 59
+        SUB R1, R0, R1
+        BZ R1, ERASE_MINUTE
+        JMP UPDATE_TIME
+ERASE_MINUTE:
+        LDW R2, 2(R7)
+        LIL R5, 1
+        CALL HAND
+        LDW R0, 2(R7)
+        LIL R1, 59
+        SUB R1, R0, R1
+        BZ R1, ERASE_HOUR
+        JMP UPDATE_TIME
+ERASE_HOUR:
+        LDW R2, 4(R7)
+        MOV R3, R2
+        SHL R2, 2
+        ADD R2, R2, R3
+        LIL R5, 2
+        CALL HAND
+UPDATE_TIME:
+        LDW R0, 0(R7)
+        ADDI R0, 1
+        LIL R1, 60
+        SUB R1, R0, R1
+        BZ R1, SEC_WRAP
+        STW R0, 0(R7)
+        JMP LOOP
+SEC_WRAP:
+        LIL R0, 0
+        STW R0, 0(R7)
+        LDW R0, 2(R7)
+        ADDI R0, 1
+        LIL R1, 60
+        SUB R1, R0, R1
+        BZ R1, MIN_WRAP
+        STW R0, 2(R7)
+        JMP LOOP
+MIN_WRAP:
+        LIL R0, 0
+        STW R0, 2(R7)
+        LDW R0, 4(R7)
+        ADDI R0, 1
+        LIL R1, 12
+        SUB R1, R0, R1
+        BZ R1, HOUR_WRAP
+        STW R0, 4(R7)
+        JMP LOOP
+HOUR_WRAP:
+        LIL R0, 0
+        STW R0, 4(R7)
+        JMP LOOP
+THREE_HANDS:
+        STW R6, 6(R7)
+        LDW R2, 4(R7)
+        MOV R3, R2
+        SHL R2, 2
+        ADD R2, R2, R3
+        LIL R5, 2
+        CALL HAND
+        LDW R2, 2(R7)
+        LIL R5, 1
+        CALL HAND
+        LDW R2, 0(R7)
+        LIL R5, 0
+        CALL HAND
+        LDW R6, 6(R7)
+        RET
+; HAND: R2 angular index 0..59; R5 type 0=sec,1=min,2=hour.
+HAND:
+        STW R6, 8(R7)
+        STW R5, 26(R7)
+        LIL R0, 0
+        LIL R1, 15
+QUADRANT:
+        SUB R3, R2, R1
+        BN R3, GET_VECTOR
+        MOV R2, R3
+        ADDI R0, 1
+        JMP QUADRANT
+GET_VECTOR:
+        STW R0, 28(R7)
+        ADD R2, R2, R2
+        LIL R4, 0x40
+        LIH R4, 4
+        ADD R4, R4, R2
+        LDB R2, 0(R4)
+        LDB R3, 1(R4)
+        LDW R5, 26(R7)
+SCALE:
+        BZ R5, ROTATE
+        MOV R4, R2
+        ADD R2, R2, R2
+        ADD R2, R2, R4
+        MOV R4, R3
+        ADD R3, R3, R3
+        ADD R3, R3, R4
+        SHR R2, 2
+        SHR R3, 2
+        ADDI R5, -1
+        BZ R5, ROTATE
+        SHR R2, 1
+        SHR R3, 1
+        JMP ROTATE
+ROTATE:
+        LDW R0, 28(R7)
+        BZ R0, VECTOR_READY
+        ADDI R0, -1
+        BZ R0, QUAD_ONE
+        ADDI R0, -1
+        BZ R0, QUAD_TWO
+        MOV R4, R2
+        LIL R5, 0
+        SUB R2, R5, R3
+        MOV R3, R4
+        JMP VECTOR_READY
+QUAD_ONE:
+        MOV R4, R2
+        MOV R2, R3
+        LIL R5, 0
+        SUB R3, R5, R4
+        JMP VECTOR_READY
+QUAD_TWO:
+        LIL R5, 0
+        SUB R2, R5, R2
+        SUB R3, R5, R3
+VECTOR_READY:
+        STW R2, 16(R7)
+        STW R3, 18(R7)
+        LIL R4, 16
+        LIH R4, 4
+        STW R4, 12(R7)
+        STW R4, 14(R7)
+        LIL R4, 0
+        STW R4, 20(R7)
+HAND_LOOP:
+        LDW R0, 12(R7)
+        SHR R0, 5
+        LDW R1, 14(R7)
+        SHR R1, 5
+        CALL PIXEL
+        LDW R4, 20(R7)
+        LIL R3, 32
+        SUB R3, R4, R3
+        BZ R3, HAND_DONE
+        ADDI R4, 1
+        STW R4, 20(R7)
+        LDW R2, 12(R7)
+        LDW R3, 16(R7)
+        ADD R2, R2, R3
+        STW R2, 12(R7)
+        LDW R2, 14(R7)
+        LDW R3, 18(R7)
+        ADD R2, R2, R3
+        STW R2, 14(R7)
+        JMP HAND_LOOP
+HAND_DONE:
+        LDW R6, 8(R7)
+        RET
+; PIXEL preserves R0,R1,R6,R7. Mode 1=set; 0=erase.
+PIXEL:
+        MOV R2, R1
+        SHL R2, 3
+        MOV R3, R0
+        SHR R3, 3
+        ADD R2, R2, R3
+        LIL R3, 0
+        LIH R3, 6
+        ADD R2, R2, R3
+        LIL R4, 7
+        AND R3, R0, R4
+        LIL R4, 0x30
+        LIH R4, 4
+        ADD R4, R4, R3
+        LDB R5, 0(R4)
+        LDB R3, 0(R2)
+        LDW R4, 24(R7)
+        BZ R4, CLEAR_PIXEL
+        OR R3, R3, R5
+        STB R3, 0(R2)
+        RET
+CLEAR_PIXEL:
+        NOT R5, R5
+        AND R3, R3, R5
+        STB R3, 0(R2)
+        RET
