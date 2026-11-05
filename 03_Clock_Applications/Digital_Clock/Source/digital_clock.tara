@@ -1,0 +1,743 @@
+; ---------------------------------------------------------------------------
+; 24-HOUR DIGITAL CLOCK — TARA assembly
+; ---------------------------------------------------------------------------
+; Displays: HH:MM:SS
+; Starts at: 00:00:00
+;
+; Seconds ones digit updates every second.
+; Seconds tens digit updates only when the ones digit changes from 9 to 0.
+; Example: 09 -> 10 updates both digits at the same time.
+;
+; Minute block updates only when seconds change from 59 to 00.
+; Hour block updates only when minutes change from 59 to 00.
+; Hour uses a 24-hour cycle: 23:59:59 -> 00:00:00.
+;
+; IMPORTANT: Set the browser TARA simulator to 10 kHz.
+; The delay is calibrated as a starting point; browser scheduling can affect wall time.
+; ---------------------------------------------------------------------------
+
+; ── Main variables ────────────────────────────────────────────────────
+; R7 = 0x0430
+; -16 sec       -14 min       -12 hour
+; -10 old_sec    -8 old_min   -6 old_hour
+
+    LIL  R7, 0x30
+    LIH  R7, 0x04            ; R7 = 0x0430
+
+; ── Clear display ─────────────────────────────────────────────────────
+    LIL  R0, 0x00
+    LIH  R0, 0x06
+    LIL  R1, 0x00
+    LIH  R1, 0x02
+    LIL  R2, 0
+clr_disp:
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    ADDI R1, -1
+    BZ   R1, clr_done
+    JMP  clr_disp
+clr_done:
+
+; ── Build pixel-mask table at 0x0480 ─────────────────────────────────
+    LIL  R0, 0x80
+    LIH  R0, 0x04
+    LIL  R2, 0x80
+    STB  R2, 0(R0)
+    LIL  R2, 0x40
+    STB  R2, 1(R0)
+    LIL  R2, 0x20
+    STB  R2, 2(R0)
+    LIL  R2, 0x10
+    STB  R2, 3(R0)
+    LIL  R2, 0x08
+    STB  R2, 4(R0)
+    LIL  R2, 0x04
+    STB  R2, 5(R0)
+    LIL  R2, 0x02
+    STB  R2, 6(R0)
+    LIL  R2, 0x01
+    STB  R2, 7(R0)
+
+; ── Build 3x5 digit font at 0x04A0 ───────────────────────────────────
+; Each digit has 5 bytes. Each byte is one row of 3 pixels.
+; Bit 2 = left, bit 1 = middle, bit 0 = right.
+    LIL  R0, 0xA0
+    LIH  R0, 0x04
+
+    ; Digit 0
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 5
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+
+    ; Digit 1
+    LIL  R2, 2
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 6
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 2
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+
+    ; Digit 2
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 4
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+
+    ; Digit 3
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+
+    ; Digit 4
+    LIL  R2, 5
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+
+    ; Digit 5
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 4
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+
+    ; Digit 6
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 4
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 5
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+
+    ; Digit 7
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+
+    ; Digit 8
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 5
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 5
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+
+    ; Digit 9
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 5
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 1
+    STB  R2, 0(R0)
+    ADDI R0, 1
+    LIL  R2, 7
+    STB  R2, 0(R0)
+    ADDI R0, 1
+
+; ── Initial time: 00:00:00 ────────────────────────────────────────────
+    LIL  R0, 0
+    STW  R0, -16(R7)         ; sec
+    STW  R0, -14(R7)         ; min
+    STW  R0, -12(R7)         ; hour
+
+    STW  R0, -10(R7)         ; old_sec
+    STW  R0, -8(R7)          ; old_min
+    STW  R0, -6(R7)          ; old_hour
+
+; ── Draw the two colons once ─────────────────────────────────────────
+    LIL  R0, 20
+    LIL  R1, 29
+    CALL set_px
+    ADDI R0, 1
+    CALL set_px
+    ADDI R1, 1
+    CALL set_px
+    ADDI R0, -1
+    CALL set_px
+
+    LIL  R0, 40
+    LIL  R1, 29
+    CALL set_px
+    ADDI R0, 1
+    CALL set_px
+    ADDI R1, 1
+    CALL set_px
+    ADDI R0, -1
+    CALL set_px
+
+; ── Draw initial hour ────────────────────────────────────────────────
+    LDW  R0, -12(R7)
+    CALL split
+
+    LIL  R1, 4
+    LIL  R2, 27
+    LIL  R3, 1
+    CALL draw_digit
+
+    LDW  R0, -12(R7)
+    CALL split
+    MOV  R0, R1
+
+    LIL  R1, 12
+    LIL  R2, 27
+    LIL  R3, 1
+    CALL draw_digit
+
+; ── Draw initial minute ──────────────────────────────────────────────
+    LDW  R0, -14(R7)
+    CALL split
+
+    LIL  R1, 24
+    LIL  R2, 27
+    LIL  R3, 1
+    CALL draw_digit
+
+    LDW  R0, -14(R7)
+    CALL split
+    MOV  R0, R1
+
+    LIL  R1, 32
+    LIL  R2, 27
+    LIL  R3, 1
+    CALL draw_digit
+
+; ── Draw initial second ──────────────────────────────────────────────
+    LDW  R0, -16(R7)
+    CALL split
+
+    LIL  R1, 44
+    LIL  R2, 27
+    LIL  R3, 1
+    CALL draw_digit
+
+    LDW  R0, -16(R7)
+    CALL split
+    MOV  R0, R1
+
+    LIL  R1, 52
+    LIL  R2, 27
+    LIL  R3, 1
+    CALL draw_digit
+
+    JMP  main
+
+; ======================================================================
+;  MAIN LOOP
+; ======================================================================
+main:
+    ; QUIT key: bit 4 at 0x05FF
+    LIL  R0, 0xFF
+    LIH  R0, 0x05
+    LDB  R1, 0(R0)
+    LIL  R2, 16
+    AND  R2, R1, R2
+    BZ   R2, no_quit
+    HLT
+no_quit:
+
+    ; ── Advance seconds ──────────────────────────────────────────────
+    LDW  R0, -16(R7)
+    ADDI R0, 1
+    STW  R0, -16(R7)
+
+    LIL  R1, 60
+    SLT  R3, R0, R1
+    BZ   R3, sec_wrap
+    JMP  update_seconds
+
+sec_wrap:
+    LIL  R0, 0
+    STW  R0, -16(R7)
+
+    ; ── Advance minutes ──────────────────────────────────────────────
+    LDW  R0, -14(R7)
+    ADDI R0, 1
+    STW  R0, -14(R7)
+
+    LIL  R1, 60
+    SLT  R3, R0, R1
+    BZ   R3, min_wrap
+    JMP  update_minutes
+
+min_wrap:
+    LIL  R0, 0
+    STW  R0, -14(R7)
+
+    ; ── Advance hours ────────────────────────────────────────────────
+    LDW  R0, -12(R7)
+    ADDI R0, 1
+    STW  R0, -12(R7)
+
+    LIL  R1, 24
+    SLT  R3, R0, R1
+    BZ   R3, hour_wrap
+    CALL update_hours
+    JMP  update_minutes
+
+hour_wrap:
+    LIL  R0, 0
+    STW  R0, -12(R7)
+    CALL update_hours
+    JMP  update_minutes
+
+; ── Minute block changed: update tens only on 09 -> 10, etc. ─────────
+update_minutes:
+    ; Check whether the old minute ones digit was 9.
+    LDW  R0, -8(R7)
+    CALL split               ; R0 = old tens, R1 = old ones
+    MOV  R0, R1
+    LIL  R1, 9
+    SLT  R3, R0, R1          ; R3 = 1 if old ones < 9
+    BZ   R3, min_both        ; old ones == 9: tens and ones change
+    JMP  min_ones_only
+
+min_both:
+    ; Erase old tens digit
+    LDW  R0, -8(R7)
+    CALL split
+    LIL  R1, 24
+    LIL  R2, 27
+    LIL  R3, 0
+    CALL draw_digit
+
+    ; Draw new tens digit
+    LDW  R0, -14(R7)
+    CALL split
+    LIL  R1, 24
+    LIL  R2, 27
+    LIL  R3, 1
+    CALL draw_digit
+
+min_ones_only:
+    ; Erase old ones digit
+    LDW  R0, -8(R7)
+    CALL split
+    MOV  R0, R1
+    LIL  R1, 32
+    LIL  R2, 27
+    LIL  R3, 0
+    CALL draw_digit
+
+    ; Draw new ones digit
+    LDW  R0, -14(R7)
+    CALL split
+    MOV  R0, R1
+    LIL  R1, 32
+    LIL  R2, 27
+    LIL  R3, 1
+    CALL draw_digit
+
+; ── Second block ──────────────────────────────────────────────────────
+; Ones digit updates every second.
+; Tens digit updates only when old ones digit is 9.
+; Example: 09 -> 10 updates both digits in the same second.
+update_seconds:
+    ; Get old ones digit
+    LDW  R0, -10(R7)         ; old second
+    CALL split               ; R0 = old tens, R1 = old ones
+
+    MOV  R0, R1              ; R0 = old ones digit
+    LIL  R1, 9
+    SLT  R3, R0, R1          ; R3 = 1 if old ones < 9
+    BZ   R3, sec_both        ; old ones == 9, so tens also changes
+    JMP  sec_ones_only
+
+; ── Tens and ones both change: 09 -> 10, 19 -> 20, etc. ─────────────
+sec_both:
+    ; Erase old tens digit
+    LDW  R0, -10(R7)
+    CALL split               ; R0 = old tens
+
+    LIL  R1, 44
+    LIL  R2, 27
+    LIL  R3, 0
+    CALL draw_digit
+
+    ; Draw new tens digit
+    LDW  R0, -16(R7)
+    CALL split               ; R0 = new tens
+
+    LIL  R1, 44
+    LIL  R2, 27
+    LIL  R3, 1
+    CALL draw_digit
+
+; ── Only ones digit changes: 00 -> 01, 01 -> 02, etc. ───────────────
+sec_ones_only:
+    ; Erase old ones digit
+    LDW  R0, -10(R7)
+    CALL split               ; R0 = old tens, R1 = old ones
+    MOV  R0, R1              ; R0 = old ones digit
+
+    LIL  R1, 52
+    LIL  R2, 27
+    LIL  R3, 0
+    CALL draw_digit
+
+    ; Draw new ones digit
+    LDW  R0, -16(R7)
+    CALL split               ; R0 = new tens, R1 = new ones
+    MOV  R0, R1              ; R0 = new ones digit
+
+    LIL  R1, 52
+    LIL  R2, 27
+    LIL  R3, 1
+    CALL draw_digit
+
+; ── Save current values as old values ────────────────────────────────
+    LDW  R0, -16(R7)
+    STW  R0, -10(R7)         ; old_sec = sec
+
+    LDW  R0, -14(R7)
+    STW  R0, -8(R7)          ; old_min = min
+
+    LDW  R0, -12(R7)
+    STW  R0, -6(R7)          ; old_hour = hour
+
+; ── Wait about one second, then repeat ───────────────────────────────
+    CALL delay
+    JMP  main
+
+; ======================================================================
+;  update_hours — redraw hour digits when the hour counter changes
+;  Uses old_hour at -6(R7) and current hour at -12(R7).
+; ======================================================================
+update_hours:
+    ; Erase old hour tens digit
+    LDW  R0, -6(R7)
+    CALL split
+    LIL  R1, 4
+    LIL  R2, 27
+    LIL  R3, 0
+    CALL draw_digit
+
+    ; Erase old hour ones digit
+    LDW  R0, -6(R7)
+    CALL split
+    MOV  R0, R1
+    LIL  R1, 12
+    LIL  R2, 27
+    LIL  R3, 0
+    CALL draw_digit
+
+    ; Draw new hour tens digit
+    LDW  R0, -12(R7)
+    CALL split
+    LIL  R1, 4
+    LIL  R2, 27
+    LIL  R3, 1
+    CALL draw_digit
+
+    ; Draw new hour ones digit
+    LDW  R0, -12(R7)
+    CALL split
+    MOV  R0, R1
+    LIL  R1, 12
+    LIL  R2, 27
+    LIL  R3, 1
+    CALL draw_digit
+    RET
+
+; ======================================================================
+;  split — separate a value into tens and ones
+;  Input : R0 = value 0..59 or 0..23
+;  Output: R0 = tens digit
+;          R1 = ones digit
+;  Clobbers R2, R3. Leaf routine.
+; ======================================================================
+split:
+    LIL  R1, 0               ; R1 = tens counter
+
+split_loop:
+    LIL  R2, 10
+    SLT  R3, R0, R2          ; R3 = 1 if R0 < 10
+    BZ   R3, split_sub       ; if R0 >= 10, subtract again
+    JMP  split_swap
+
+split_sub:
+    SUB  R0, R0, R2          ; value -= 10
+    ADDI R1, 1               ; tens++
+    JMP  split_loop
+
+split_swap:
+    ; At this point:
+    ;   R0 = ones digit
+    ;   R1 = tens digit
+    ; Swap them so that:
+    ;   R0 = tens digit
+    ;   R1 = ones digit
+    MOV  R2, R0
+    MOV  R0, R1
+    MOV  R1, R2
+
+split_done:
+    RET
+
+; ======================================================================
+;  draw_digit — draw or erase one digit
+;  Input : R0 = digit 0..9
+;          R1 = left x
+;          R2 = top y
+;          R3 = mode: 1 = draw, 0 = erase
+;  Digit size: 6x10 pixels.
+;  Clobbers R0-R5. Saves/restores R6.
+; ======================================================================
+draw_digit:
+    STW  R6, 4(R7)
+    STW  R0, 0(R7)           ; digit
+    STW  R1, -4(R7)          ; left x
+    STW  R2, -2(R7)          ; top y
+    STW  R3, 6(R7)           ; mode
+
+    ; font pointer = 0x04A0 + digit * 5
+    LIL  R3, 0xA0
+    LIH  R3, 0x04
+    MOV  R4, R0
+    SHL  R4, 2
+    ADD  R3, R3, R4
+    ADD  R3, R3, R0
+    STW  R3, 2(R7)
+
+    LIL  R3, 0
+    STW  R3, 8(R7)           ; row = 0
+
+dd_row:
+    LDW  R3, 2(R7)
+    LDW  R4, 8(R7)
+    ADD  R3, R3, R4
+    LDB  R4, 0(R3)
+    STW  R4, 10(R7)          ; row bits
+
+    LIL  R4, 4
+    STW  R4, 12(R7)          ; mask
+
+    LIL  R3, 0
+    STW  R3, 14(R7)          ; column = 0
+
+dd_col:
+    LDW  R4, 10(R7)
+    LDW  R3, 12(R7)
+    AND  R4, R4, R3
+    BZ   R4, dd_no_pixel
+
+    LDW  R0, -4(R7)
+    LDW  R3, 14(R7)
+    SHL  R3, 1
+    ADD  R0, R0, R3          ; x
+
+    LDW  R1, -2(R7)
+    LDW  R3, 8(R7)
+    LIL  R4, 4
+    SUB  R3, R4, R3          ; 4 - row
+    SHL  R3, 1
+    ADD  R1, R1, R3          ; y
+
+    LDW  R3, 6(R7)
+    BZ   R3, dd_erase
+
+    CALL set_px
+    ADDI R0, 1
+    CALL set_px
+    ADDI R1, 1
+    CALL set_px
+    ADDI R0, -1
+    CALL set_px
+    JMP  dd_no_pixel
+
+dd_erase:
+    CALL clr_px
+    ADDI R0, 1
+    CALL clr_px
+    ADDI R1, 1
+    CALL clr_px
+    ADDI R0, -1
+    CALL clr_px
+
+dd_no_pixel:
+    LDW  R3, 12(R7)
+    SHR  R3, 1
+    STW  R3, 12(R7)
+
+    LDW  R3, 14(R7)
+    ADDI R3, 1
+    STW  R3, 14(R7)
+
+    LIL  R4, 3
+    SLT  R3, R3, R4
+    BZ   R3, dd_next_row
+    JMP  dd_col
+
+dd_next_row:
+    LDW  R3, 8(R7)
+    ADDI R3, 1
+    STW  R3, 8(R7)
+
+    LIL  R4, 5
+    SLT  R3, R3, R4
+    BZ   R3, dd_done
+    JMP  dd_row
+
+dd_done:
+    LDW  R6, 4(R7)
+    RET
+
+; ======================================================================
+;  set_px — turn on pixel (R0=x, R1=y)
+;  Preserves R0 and R1. Clobbers R2-R5. Leaf routine.
+; ======================================================================
+set_px:
+    MOV  R2, R1
+    SHL  R2, 3
+    MOV  R3, R0
+    SHR  R3, 3
+    ADD  R2, R2, R3
+    LIL  R3, 0x00
+    LIH  R3, 0x06
+    ADD  R2, R2, R3
+
+    LIL  R4, 7
+    AND  R3, R0, R4
+    LIL  R4, 0x80
+    LIH  R4, 0x04
+    ADD  R4, R4, R3
+    LDB  R5, 0(R4)
+
+    LDB  R3, 0(R2)
+    OR   R3, R3, R5
+    STB  R3, 0(R2)
+    RET
+
+; ======================================================================
+;  clr_px — turn off pixel (R0=x, R1=y)
+;  Preserves R0 and R1. Clobbers R2-R5. Leaf routine.
+; ======================================================================
+clr_px:
+    MOV  R2, R1
+    SHL  R2, 3
+    MOV  R3, R0
+    SHR  R3, 3
+    ADD  R2, R2, R3
+    LIL  R3, 0x00
+    LIH  R3, 0x06
+    ADD  R2, R2, R3
+
+    LIL  R4, 7
+    AND  R3, R0, R4
+    LIL  R4, 0x80
+    LIH  R4, 0x04
+    ADD  R4, R4, R3
+    LDB  R5, 0(R4)
+
+    LDB  R3, 0(R2)
+    NOT  R5, R5
+    AND  R3, R3, R5
+    STB  R3, 0(R2)
+    RET
+
+; ======================================================================
+;  delay — approximate pacing when simulator is set to 10 kHz
+; ======================================================================
+delay:
+    LIL  R0, 0xC4
+    LIH  R0, 0x09            ; R0 = 2500 (3 instructions/iteration)
+delay_loop:
+    ADDI R0, -1
+    BZ   R0, delay_done
+    JMP  delay_loop
+delay_done:
+    RET
+
+; ── End ───────────────────────────────────────────────────────────────
+    HLT
