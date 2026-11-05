@@ -183,402 +183,398 @@ This starting time separates the three hands visually and makes their positions 
 
 ## 14.10 Hand Position Calculation
 
-The position of each hand is calculated relative to the center of the clock.
+The TARA16 Analog Clock uses a lookup-table-based method to calculate the positions of the clock hands.
 
-In a coordinate-based display, a point is represented using:
+Instead of calculating sine and cosine values using multiplication and trigonometric functions, the program stores predefined coordinate vectors in memory.
 
-* X-coordinate: Horizontal position.
-* Y-coordinate: Vertical position.
+The clock uses a 64 × 64 monochrome display.
 
-The clock center is represented by:
+The centre of the clock is:
 
-```text
-Center X = CX
-Center Y = CY
-```
+* Centre X = 32
+* Centre Y = 32
 
-The hand endpoint is calculated using its length and angular position.
+The coordinate vectors are stored starting at memory address `0x0440`.
 
-The general mathematical equations are:
+Each vector contains two values:
 
-```text
-X = CX + R × cos(angle)
+* X displacement
+* Y displacement
 
-Y = CY + R × sin(angle)
-```
+The program uses quadrant rotation to generate all 60 positions from the stored coordinate vectors.
 
-Where:
+### Fixed-point representation
 
-* CX is the center X-coordinate.
-* CY is the center Y-coordinate.
-* R is the hand length.
-* angle is the angular position.
+The coordinates use a fixed-point representation with five fractional bits.
 
-The sign and orientation of the coordinates depend on the display coordinate system.
+This allows the program to maintain fractional coordinate values during hand drawing.
 
-These equations are commonly used in graphical applications to calculate points along a circle.
-
-For an implementation using a lookup table or predefined positions, the program may obtain the coordinates directly instead of calculating trigonometric functions.
+The initial coordinate value is `0x0410`, which represents the clock centre with half-pixel precision.
 
 ## 14.11 Second Hand Position
 
-The second hand has sixty possible positions.
+The second hand has 60 possible positions.
 
-Each second changes its angular position by six degrees.
+Each second corresponds to one position around the clock face.
 
-The relationship is:
+The position index ranges from 0 to 59.
 
-```text
-360 degrees / 60 seconds = 6 degrees
-```
-
-Therefore:
+The second-hand type is represented by:
 
 ```text
-Second Angle = Seconds × 6 degrees
+R5 = 0
 ```
 
-For example:
+The second hand uses the original lookup-table vector without additional scaling.
 
-| Seconds | Angular Position |
-| ------- | ---------------: |
-| 0       |               0° |
-| 15      |              90° |
-| 30      |             180° |
-| 45      |             270° |
-| 59      |             354° |
+Its nominal radius is 24 pixels.
 
-After the sixtieth position, the second hand returns to its starting position.
+Whenever the seconds counter increases, the second hand moves to the corresponding position.
 
-The TARA16 implementation previously discussed uses sixty second positions.
+After reaching 59, the next update resets the counter to zero.
 
 ## 14.12 Minute Hand Position
 
-The minute hand also has sixty positions.
+The minute hand also has 60 possible positions.
 
-Each minute changes its angular position by six degrees.
+Its position is determined by the current minute value.
 
-The relationship is:
+The minute-hand type is represented by:
 
 ```text
-360 degrees / 60 minutes = 6 degrees
+R5 = 1
 ```
+
+The program scales the lookup-table vector to approximately 75% of the second-hand vector.
 
 Therefore:
 
 ```text
-Minute Angle = Minutes × 6 degrees
+Minute radius = 24 × 0.75
+              = 18 pixels
 ```
 
-For example:
+The minute hand moves when the seconds counter completes a full cycle.
 
-| Minutes | Angular Position |
-| ------- | ---------------: |
-| 0       |               0° |
-| 15      |              90° |
-| 30      |             180° |
-| 45      |             270° |
-| 59      |             354° |
-
-The minute hand completes one revolution every sixty minutes.
+After 59 minutes, the next update resets the minute counter to zero and increments the hour counter.
 
 ## 14.13 Hour Hand Position
 
-The hour hand has twelve main positions.
+The hour hand has 12 main positions.
 
-Each hour position corresponds to thirty degrees.
-
-The relationship is:
+Its type is represented by:
 
 ```text
-360 degrees / 12 hours = 30 degrees
+R5 = 2
 ```
+
+The program converts the hour value into a 60-position index.
+
+The conversion is:
+
+```text
+Hour index = Hour value × 5
+```
+
+Each hour position is therefore separated by five positions in the 60-position coordinate system.
+
+The hour-hand vector is scaled to approximately 37.5% of the original vector.
 
 Therefore:
 
 ```text
-Hour Angle = Hours × 30 degrees
+Hour radius = 24 × 0.375
+            = 9 pixels
 ```
 
-For a traditional clock, the hour hand also moves gradually as the minutes pass.
+The program updates the hour counter after the minute counter completes its cycle.
 
-A more accurate angular relationship is:
+The hour counter ranges from 0 to 11.
 
-```text
-Hour Angle = (Hours mod 12 × 30) + (Minutes × 0.5)
-```
+A stored hour value of zero represents the 12 o'clock position.
 
-For example, at 10:30:
-
-```text
-Hour Angle = (10 × 30) + (30 × 0.5)
-
-Hour Angle = 300 + 15
-
-Hour Angle = 315 degrees
-```
-
-This means the hour hand moves halfway between the 10 and 11 positions.
-
-The exact calculation used in the TARA16 program should be confirmed from its source.
+The current implementation advances the hour hand in discrete hourly steps. It does not continuously interpolate the hand position using minutes.
 
 ## 14.14 Clock Display Updating
 
-An analog clock must update the positions of its hands whenever the time changes.
+The clock display is updated continuously using the main loop.
 
-When the second hand moves, its previous position must be erased before its new position is displayed.
+The main loop performs the following operations:
 
-Otherwise, the clock will show unwanted trails.
+1. Enable pixel drawing mode.
+2. Draw the hour hand.
+3. Draw the minute hand.
+4. Draw the second hand.
+5. Execute the software delay loop.
+6. Disable pixel drawing mode.
+7. Erase the previous second-hand position.
+8. Erase the minute hand when the seconds value reaches 59.
+9. Erase the hour hand when both seconds and minutes reach 59.
+10. Update the time counters.
+11. Repeat the process.
 
-A general display-update process is:
+The `THREE_HANDS` routine draws all three hands.
 
-1. Store the previous hand positions.
-2. Erase the previous hand graphics.
-3. Update the time values.
-4. Calculate or retrieve the new hand positions.
-5. Draw the hour hand.
-6. Draw the minute hand.
-7. Draw the second hand.
-8. Repeat the process.
+The `HAND` routine calculates the required coordinate vectors and draws the selected hand.
 
-The clock face markings should remain visible while the hands move.
-
-The previously discussed TARA16 analog clock implementation uses selective hand erasure and fixed outer dots.
-
-This approach helps preserve the clock face while updating the moving hands.
+This approach allows the display to be updated without clearing the entire clock face on every iteration.
 
 ## 14.15 Selective Hand Erasure
 
-Selective hand erasure is important for maintaining a clean clock display.
+Selective hand erasure prevents unwanted trails when the clock hands move.
 
-When a hand moves, its previous drawing must be removed.
-
-However, erasing the entire clock face would also remove the fixed clock markings.
-
-Therefore, the program must remove only the pixels or display positions occupied by the previous hand.
-
-The general process is:
+The program uses a drawing-mode variable stored at:
 
 ```text
-Store Previous Hand Position
-
-Erase Previous Hand
-
-Calculate New Hand Position
-
-Draw New Hand
+R7 + 24
 ```
 
-This operation is repeated whenever the hand moves.
+The drawing modes are:
 
-In the previously discussed implementation, selective erasure is used instead of repeatedly clearing the complete clock face.
+| Value | Operation   |
+| ----- | ----------- |
+| 1     | Set pixel   |
+| 0     | Clear pixel |
+
+The `PIXEL` routine checks this mode before modifying framebuffer memory.
+
+When drawing mode is enabled, the pixel mask is combined with the existing framebuffer byte using a bitwise OR operation.
+
+When drawing mode is disabled, the mask is inverted and combined with the framebuffer byte using a bitwise AND operation.
+
+The fixed clock-face markings are not deliberately erased during normal hand updates.
 
 ## 14.16 Clock Execution Flow
 
-The general execution flow of an analog clock is:
+The actual execution flow of the TARA16 Analog Clock is:
 
 ```text
-+--------------------------+
-|       Start Clock        |
-+------------+-------------+
-             |
-             v
-+--------------------------+
-| Initialize Clock Face    |
-+------------+-------------+
-             |
-             v
-+--------------------------+
-| Initialize Time Values   |
-+------------+-------------+
-             |
-             v
-+--------------------------+
-| Draw Fixed Clock Markings|
-+------------+-------------+
-             |
-             v
-+--------------------------+
-| Draw Three Clock Hands   |
-+------------+-------------+
-             |
-             v
-+--------------------------+
-| Wait for Next Time Update|
-+------------+-------------+
-             |
-             v
-+--------------------------+
-| Erase Previous Hands     |
-+------------+-------------+
-             |
-             v
-+--------------------------+
-| Update Time Values       |
-+------------+-------------+
-             |
-             v
-+--------------------------+
-| Calculate New Positions  |
-+------------+-------------+
-             |
-             v
-+--------------------------+
-| Draw Updated Hands       |
-+------------+-------------+
-             |
-             v
-+--------------------------+
-| Repeat Clock Operation   |
-+--------------------------+
+          START
+            |
+            v
+     Initialize R7
+            |
+            v
+     Initialize Time
+       12:00:00
+            |
+            v
+   Build Pixel Mask Table
+            |
+            v
+   Build Coordinate Table
+            |
+            v
+     Clear Framebuffer
+            |
+            v
+     Draw Clock Markings
+            |
+            v
+       MAIN LOOP
+            |
+            v
+    Enable Drawing Mode
+            |
+            v
+      Draw Three Hands
+            |
+            v
+      Software Delay
+            |
+            v
+    Disable Drawing Mode
+            |
+            v
+      Erase Old Hands
+            |
+            v
+       Update Seconds
+            |
+            v
+     Check Minute Rollover
+            |
+            v
+      Check Hour Rollover
+            |
+            v
+       Repeat MAIN LOOP
 ```
 
-This flowchart describes the general display-update process. The actual program may use a different internal sequence.
+The program starts with an initial time of 12:00:00 and continuously executes the main loop.
 
 ## 14.17 TARA16 Instructions Used in the Analog Clock
 
-The analog clock can demonstrate different categories of TARA16 instructions.
+The following instructions are used in the actual assembly source.
 
-| Instruction | Possible Application                             |
-| ----------- | ------------------------------------------------ |
-| MOV         | Transfer coordinates and time values             |
-| LIL         | Load immediate values                            |
-| LIH         | Load upper immediate values                      |
-| ADD         | Calculate coordinate positions                   |
-| SUB         | Calculate coordinate differences                 |
-| ADDI        | Increment time values                            |
-| MUL         | Perform multiplication for position calculations |
-| AND         | Perform bitwise operations                       |
-| OR          | Perform bitwise operations                       |
-| XOR         | Perform bitwise operations                       |
-| NOT         | Perform bitwise complement                       |
-| SHL         | Shift values left                                |
-| SHR         | Shift values right                               |
-| SLT         | Perform comparisons                              |
-| BZ          | Implement zero-related conditions                |
-| BN          | Implement negative-related conditions            |
-| JMP         | Repeat clock operations                          |
-| CALL        | Call a subroutine                                |
-| RET         | Return from a subroutine                         |
-| LDW         | Load clock-related data                          |
-| STW         | Store clock-related data                         |
+| Instruction | Application                                        |
+| ----------- | -------------------------------------------------- |
+| JMP         | Transfers execution to another instruction address |
+| LIL         | Loads the lower immediate value                    |
+| LIH         | Loads the upper immediate value                    |
+| MOV         | Copies data between registers                      |
+| ADD         | Performs addition                                  |
+| ADDI        | Adds an immediate value                            |
+| SUB         | Performs subtraction                               |
+| SHL         | Performs left shifting                             |
+| SHR         | Performs right shifting                            |
+| AND         | Performs bitwise AND                               |
+| OR          | Performs bitwise OR                                |
+| NOT         | Performs bitwise complement                        |
+| BZ          | Branches when a register value is zero             |
+| BN          | Branches when a register value is negative         |
+| CALL        | Calls a subroutine                                 |
+| RET         | Returns from a subroutine                          |
+| LDW         | Loads a word from memory                           |
+| STW         | Stores a word in memory                            |
+| LDB         | Loads a byte from memory                           |
+| STB         | Stores a byte in memory                            |
 
-These are possible uses based on the recorded instruction set. The actual instruction sequence must be identified from the analog clock source code.
+These instructions are used for time management, coordinate calculation, memory access, pixel operations, and program control.
 
 ## 14.18 Important Programming Concepts Demonstrated
 
-The analog clock demonstrates several programming concepts.
-
 ### Coordinate Geometry
 
-The position of each hand is calculated relative to the clock center.
+The clock uses X and Y coordinates to represent the positions of its hands.
+
+### Lookup Tables
+
+Predefined coordinate vectors are stored in memory to avoid calculating trigonometric functions during execution.
+
+### Quadrant Rotation
+
+The program uses quadrant-based coordinate transformation to generate positions around the complete clock face.
+
+### Fixed-Point Arithmetic
+
+Five fractional bits are used to maintain precision during coordinate calculations.
 
 ### Arithmetic Operations
 
-Arithmetic calculations are used to determine time values and hand positions.
+Addition, subtraction, and shifting operations are used for vector scaling and time updates.
 
 ### Conditional Branching
 
-Conditional operations help control time updates and position changes.
+Conditional branches control hand positioning, counter updates, and rollover conditions.
 
-### Loops
+### Loops and Subroutines
 
-The program continuously updates the clock display.
+The program uses loops and subroutines to draw pixels, generate hand positions, and continuously update the clock.
 
-### Memory Management
+### Framebuffer Management
 
-The program maintains the current time and previous hand positions.
+The framebuffer stores the graphical output of the clock.
 
-### Display Management
+### Selective Pixel Erasure
 
-The program must erase old hand positions and draw new ones without disturbing fixed clock markings.
-
-### Angle and Position Mapping
-
-The relationship between time values and angular positions is used to represent time visually.
+The program clears previous hand pixels while preserving fixed clock markings.
 
 ## 14.19 Testing the Analog Clock
 
-Testing verifies whether the clock displays time correctly.
+The Analog Clock was assembled and executed using the TARA16 assembler and CPU simulator.
 
-The following test cases are useful:
+### Assembly Results
 
-| Test Case                 | Expected Result                             |
-| ------------------------- | ------------------------------------------- |
-| Initialize clock          | Clock face and three hands are displayed    |
-| Start at 10:10:00         | Hands appear at the corresponding positions |
-| Update seconds            | Second hand moves to the next position      |
-| Update minutes            | Minute hand moves correctly                 |
-| Update hours              | Hour hand advances correctly                |
-| Reach 60 seconds          | Second hand completes one revolution        |
-| Reach 60 minutes          | Minute hand completes one revolution        |
-| Reach 12 hours            | Hour hand completes one revolution          |
-| Move a hand               | Previous hand position is erased            |
-| Update display repeatedly | Fixed clock markings remain visible         |
+| Parameter         | Result                   |
+| ----------------- | ------------------------ |
+| Source file       | tara16_analog_clock.tara |
+| Assembly status   | Successful               |
+| Instruction words | 334                      |
+| Labels            | 25                       |
+| Assembly errors   | None                     |
 
-Additional testing should verify that the hands do not leave unwanted trails and that their positions remain consistent with the stored time.
+### CPU Simulation Results
+
+The program was executed for 100,000 instructions.
+
+| Parameter                   | Result  |
+| --------------------------- | ------- |
+| Instructions executed       | 100,000 |
+| CPU halted                  | No      |
+| CPU error                   | None    |
+| Program counter             | 0x246   |
+| Seconds counter             | 15      |
+| Minutes counter             | 0       |
+| Hours counter               | 0       |
+| Non-zero framebuffer pixels | 54      |
+
+The observed clock state was:
+
+```text
+12:00:15
+```
+
+### Framebuffer Verification
+
+The framebuffer was inspected by reading memory addresses from:
+
+```text
+0x0600 – 0x07FF
+```
+
+The memory contents were converted into a 64 × 64 text-based pixel representation.
+
+The output showed clock markings and hand pixels.
+
+This confirms that the program writes graphical data into the framebuffer.
+
+The simulation results demonstrate successful assembly and CPU execution. They do not independently establish the correctness of every hand position.
 
 ## 14.20 Timing Accuracy
 
-An analog clock must use a suitable timing mechanism to maintain accurate time.
+The program uses a software delay loop to control the interval between display updates.
 
-The second hand should advance once every real-world second.
+The delay routine uses a register counter that is repeatedly decremented until it reaches zero.
 
-However, a software simulation may execute much faster or slower than real time.
+The delay is implemented using instructions rather than a calibrated hardware timer.
 
-If the program uses simulation ticks or instruction counts, these should not automatically be interpreted as calibrated seconds.
+Therefore, the simulation execution count must not be interpreted as real-world seconds.
 
-A reliable real-time implementation requires a suitable timing source, such as:
+The current implementation demonstrates time-counter updates and hand movement logic, but accurate real-time operation has not been established.
 
-* Hardware timer.
-* Timer interrupt.
-* Real-time clock module.
-* Calibrated software delay.
-
-The previously discussed TARA16 analog clock implementation uses simulation ticks that are not calibrated to wall-clock seconds.
-
-Therefore, its displayed movement demonstrates clock-hand logic rather than guaranteed real-time accuracy.
+A hardware timer or calibrated timing source would be required for reliable wall-clock timing.
 
 ## 14.21 Testing and Debugging
 
-Common problems in analog clock applications include:
+The following checks are useful when testing the Analog Clock:
 
-1. Incorrect hand positions.
-2. Incorrect angular calculations.
-3. Incorrect coordinate mapping.
-4. Unwanted trails from previous hand positions.
-5. Incorrect time updates.
-6. Display overlap between hands.
-7. Incorrect handling of position wraparound.
+1. Verify the initial time values.
+2. Check the coordinate lookup table.
+3. Verify quadrant rotation.
+4. Inspect the X and Y coordinates generated by the HAND routine.
+5. Check the drawing-mode variable.
+6. Verify framebuffer addresses.
+7. Check second, minute, and hour rollover.
+8. Inspect old-hand erasure.
+9. Check that fixed clock markings remain visible.
+10. Monitor CPU errors and program execution.
 
-A systematic debugging process should check the stored time values, hand positions, display coordinates, and update sequence.
-
-The program should also be checked for correct behavior when the hands overlap or cross one another.
+The TARA16 simulator can be used to inspect registers, memory, and program execution.
 
 ## 14.22 Applications of Analog Clocks
 
-Analog clock concepts are used in many systems.
+The concepts demonstrated in this project are useful in:
 
-Examples include:
-
-* Traditional wall clocks.
-* Wristwatches.
-* Dashboard displays.
-* Graphical user interfaces.
-* Embedded display systems.
+* Embedded display applications.
 * Digital watch interfaces.
-* Educational electronics projects.
+* Graphical user interfaces.
+* FPGA-based display systems.
+* Educational processor projects.
+* Custom instruction-set demonstrations.
 
-Analog clock development is useful for understanding coordinate geometry, circular motion, display refreshing, and time representation.
+The project provides practical experience in combining processor instructions, coordinate geometry, lookup tables, and framebuffer operations.
 
 ## 14.23 Conclusion
 
-The Analog Clock application demonstrates how a custom instruction set can be used to develop a graphical time-display application.
+The TARA16 Analog Clock demonstrates how a custom instruction set can be used to develop a graphical application.
 
-The program maintains time values and converts them into positions for the hour, minute, and second hands.
+The program maintains hour, minute, and second counters and converts their values into coordinate positions for three clock hands.
 
-It demonstrates arithmetic operations, coordinate calculations, conditional branching, loops, and display management.
+A lookup table and quadrant-based transformation are used to generate hand positions.
 
-The use of selective hand erasure helps maintain a clean display while the hands move.
+The program also demonstrates fixed-point arithmetic, memory access, subroutine calls, framebuffer management, and selective pixel erasure.
 
-This project provides practical experience in combining processor instructions with graphical programming concepts.
+The source successfully assembled into 334 instruction words and executed for 100,000 instructions without a CPU error.
+
+This project provides practical experience in developing graphical applications using a custom processor architecture.
