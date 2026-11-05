@@ -1,0 +1,605 @@
+; =====================================================================
+; BRICK BREAKER - TARA16 Assembly
+; Based on the 64x64 framebuffer and keyboard map in the supplied Snake
+; reference program.
+;
+; Display : 64x64, 1 bit/pixel, framebuffer 0x0600-0x07FF
+; Keyboard: 0x05FF
+;   bit 2 = LEFT, bit 3 = RIGHT, bit 4 = QUIT
+;
+; Controls:
+;   LEFT / RIGHT : move paddle
+;   QUIT         : stop game
+;
+; Game:
+;   200 targets arranged in 20 columns x 10 rows.
+;   Each target is represented by one bright pixel because the display
+;   is monochrome and this compact version uses pixel-level collision.
+;   Ball destroys a target on contact. 10 points per target.
+;   3 lives. Clear all 200 targets to win.
+;
+; Variables (R7 = 0x0410):
+;   -16 ball_x       -14 ball_y
+;   -12 ball_dx      -10 ball_dy
+;    -8 paddle_left   -6 score
+;    -4 lives         -2 targets_left
+;     0 new_x         +2 new_y
+;     +4 temp
+;
+; Helpers:
+;   set_px / clr_px / test_px use the same calling convention as Snake.
+; =====================================================================
+
+        LIL  R7, 0x10
+        LIH  R7, 0x04              ; R7 = 0x0410
+
+; ----- Clear framebuffer -----
+        LIL  R0, 0x00
+        LIH  R0, 0x06              ; R0 = 0x0600
+        LIL  R1, 0x00
+        LIH  R1, 0x02              ; 512 bytes
+        LIL  R2, 0
+clear_screen:
+        STB  R2, 0(R0)
+        ADDI R0, 1
+        ADDI R1, -1
+        BZ   R1, screen_cleared
+        JMP  clear_screen
+screen_cleared:
+
+; ----- Build pixel bit-mask table at 0x0420 -----
+        LIL  R0, 0x20
+        LIH  R0, 0x04
+        LIL  R2, 0x80
+        STB  R2, 0(R0)
+        LIL  R2, 0x40
+        STB  R2, 1(R0)
+        LIL  R2, 0x20
+        STB  R2, 2(R0)
+        LIL  R2, 0x10
+        STB  R2, 3(R0)
+        LIL  R2, 0x08
+        STB  R2, 4(R0)
+        LIL  R2, 0x04
+        STB  R2, 5(R0)
+        LIL  R2, 0x02
+        STB  R2, 6(R0)
+        LIL  R2, 0x01
+        STB  R2, 7(R0)
+
+; ----- Initialize game state -----
+        LIL  R0, 32
+        STW  R0, -16(R7)           ; ball_x
+        LIL  R0, 18
+        STW  R0, -14(R7)           ; ball_y
+        LIL  R0, 1
+        STW  R0, -12(R7)           ; ball_dx
+        STW  R0, -10(R7)           ; ball_dy
+        LIL  R0, 26
+        STW  R0, -8(R7)            ; paddle_left
+        LIL  R0, 0
+        STW  R0, -6(R7)            ; score
+        LIL  R0, 3
+        STW  R0, -4(R7)            ; lives
+        LIL  R0, 200
+        STW  R0, -2(R7)            ; targets_left
+
+; ----- Draw 200 targets using nested loops (20 columns x 10 rows) -----
+; x positions: 3,6,...,60. y positions: 36,38,...,54.
+        LIL  R0, 36
+        STW  R0, 6(R7)             ; target_y
+target_row:
+        LIL  R0, 3
+        STW  R0, 8(R7)             ; target_x
+target_col:
+        LDW  R0, 8(R7)
+        LDW  R1, 6(R7)
+        CALL set_px
+        LDW  R0, 8(R7)
+        ADDI R0, 3
+        STW  R0, 8(R7)
+        LIL  R1, 63
+        SLT  R2, R0, R1            ; continue while x < 63
+        BZ   R2, target_row_done
+        JMP  target_col
+target_row_done:
+        LDW  R0, 6(R7)
+        ADDI R0, 2
+        STW  R0, 6(R7)
+        LIL  R1, 56
+        SLT  R2, R0, R1            ; continue while y < 56
+        BZ   R2, target_draw_done
+        JMP  target_row
+target_draw_done:
+
+; ----- Draw initial paddle (6 pixels at y=4) -----
+        LIL  R0, 26
+        LIL  R1, 4
+        CALL set_px
+        LIL  R0, 27
+        LIL  R1, 4
+        CALL set_px
+        LIL  R0, 28
+        LIL  R1, 4
+        CALL set_px
+        LIL  R0, 29
+        LIL  R1, 4
+        CALL set_px
+        LIL  R0, 30
+        LIL  R1, 4
+        CALL set_px
+        LIL  R0, 31
+        LIL  R1, 4
+        CALL set_px
+paddle_init_done:
+
+; ----- Draw initial ball -----
+        LIL  R0, 32
+        LIL  R1, 18
+        CALL set_px
+
+; =====================================================================
+; MAIN LOOP
+; =====================================================================
+main:
+; Remember the paddle position before applying this frame's input.
+        LDW  R0, -8(R7)
+        STW  R0, 4(R7)            ; old_paddle_left
+; Read keyboard
+        LIL  R0, 0xFF
+        LIH  R0, 0x05
+        LDB  R1, 0(R0)
+
+; Quit bit 4
+        LIL  R2, 16
+        AND  R2, R1, R2
+        BZ   R2, input_left
+        JMP  game_over
+
+; LEFT bit 2: move exactly one pixel left per game frame.
+; LEFT has priority if both direction bits are present.
+input_left:
+        LIL  R2, 4
+        AND  R2, R1, R2
+        BZ   R2, input_right
+        LDW  R3, -8(R7)
+        LIL  R4, 2
+        SLT  R5, R4, R3
+        BZ   R5, paddle_draw
+        ADDI R3, -1
+        STW  R3, -8(R7)
+        JMP  paddle_draw
+
+; RIGHT bit 3: move exactly one pixel right per game frame.
+input_right:
+        LIL  R2, 8
+        AND  R2, R1, R2
+        BZ   R2, paddle_draw
+        LDW  R3, -8(R7)
+        LIL  R4, 56
+        SLT  R5, R3, R4
+        BZ   R5, paddle_draw
+        ADDI R3, 1
+        STW  R3, -8(R7)
+
+paddle_draw:
+; If the paddle did not move, do not erase/redraw it.
+; This prevents visible flicker while the player is not pressing a key.
+        LDW  R0, 4(R7)             ; old paddle position
+        LDW  R1, -8(R7)            ; new paddle position
+        SUB  R2, R0, R1
+        BZ   R2, paddle_unchanged
+; Paddle moved: erase its old pixels and draw it at the new position.
+        LDW  R0, 4(R7)
+        ADDI R0, 0
+        LIL  R1, 4
+        CALL clr_px
+        LDW  R0, 4(R7)
+        ADDI R0, 1
+        LIL  R1, 4
+        CALL clr_px
+        LDW  R0, 4(R7)
+        ADDI R0, 2
+        LIL  R1, 4
+        CALL clr_px
+        LDW  R0, 4(R7)
+        ADDI R0, 3
+        LIL  R1, 4
+        CALL clr_px
+        LDW  R0, 4(R7)
+        ADDI R0, 4
+        LIL  R1, 4
+        CALL clr_px
+        LDW  R0, 4(R7)
+        ADDI R0, 5
+        LIL  R1, 4
+        CALL clr_px
+        LDW  R0, -8(R7)
+        ADDI R0, 0
+        LIL  R1, 4
+        CALL set_px
+        LDW  R0, -8(R7)
+        ADDI R0, 1
+        LIL  R1, 4
+        CALL set_px
+        LDW  R0, -8(R7)
+        ADDI R0, 2
+        LIL  R1, 4
+        CALL set_px
+        LDW  R0, -8(R7)
+        ADDI R0, 3
+        LIL  R1, 4
+        CALL set_px
+        LDW  R0, -8(R7)
+        ADDI R0, 4
+        LIL  R1, 4
+        CALL set_px
+        LDW  R0, -8(R7)
+        ADDI R0, 5
+        LIL  R1, 4
+        CALL set_px
+
+paddle_unchanged:
+; Calculate next ball position
+move_ball:
+        LDW  R0, -16(R7)
+        LDW  R1, -12(R7)
+        ADD  R0, R0, R1
+        STW  R0, 0(R7)             ; new_x
+        LDW  R0, -14(R7)
+        LDW  R1, -10(R7)
+        ADD  R0, R0, R1
+        STW  R0, 2(R7)             ; new_y
+
+; Left/right wall collision: x range 2..61
+        LDW  R0, 0(R7)
+        LIL  R1, 2
+        SLT  R2, R0, R1
+        BZ   R2, check_right_wall
+        JMP  bounce_x
+check_right_wall:
+        LIL  R1, 61
+        SLT  R2, R1, R0
+        BZ   R2, check_top_wall
+bounce_x:
+        LDW  R3, -12(R7)
+        NOT  R3, R3
+        ADDI R3, 1
+        STW  R3, -12(R7)
+        LDW  R0, -16(R7)
+        LDW  R1, -12(R7)
+        ADD  R0, R0, R1
+        STW  R0, 0(R7)
+
+; Top wall collision: y must stay <=62
+check_top_wall:
+        LDW  R0, 2(R7)
+        LIL  R1, 62
+        SLT  R2, R1, R0
+        BZ   R2, check_bottom
+        LDW  R3, -10(R7)
+        NOT  R3, R3
+        ADDI R3, 1
+        STW  R3, -10(R7)
+        LDW  R0, -14(R7)
+        LDW  R1, -10(R7)
+        ADD  R0, R0, R1
+        STW  R0, 2(R7)
+
+; Bottom: if ball reaches y=5, check paddle; below that lose life
+check_bottom:
+        LDW  R0, 2(R7)
+        LIL  R1, 5
+        SLT  R2, R0, R1
+        BZ   R2, check_targets
+        ; Ball passed below the paddle/ground line: end the game.
+        JMP  game_over
+
+; Paddle collision when moving downward into y=5
+; If new_y == 5, and new_x is in [paddle_left, paddle_left+5],
+; reverse vertical direction.
+check_targets:
+        LDW  R0, 2(R7)
+        LIL  R1, 5
+        SUB  R2, R0, R1
+        BZ   R2, paddle_hit_check
+        JMP  target_check
+paddle_hit_check:
+        LDW  R0, 0(R7)
+        LDW  R1, -8(R7)
+        SLT  R2, R0, R1
+        BZ   R2, paddle_right_edge
+        JMP  target_check
+paddle_right_edge:
+        LDW  R0, -8(R7)
+        ADDI R0, 5
+        LDW  R1, 0(R7)
+        SLT  R2, R0, R1
+        BZ   R2, paddle_bounce
+        JMP  target_check
+paddle_bounce:
+        LDW  R3, -10(R7)
+        NOT  R3, R3
+        ADDI R3, 1
+        STW  R3, -10(R7)
+        LIL  R0, 6
+        STW  R0, 2(R7)
+
+; Target collision: targets are isolated lit pixels in the upper field.
+; A hit removes that pixel, adds 10 points, and reverses vertical motion.
+target_check:
+        LDW  R0, 0(R7)
+        LDW  R1, 2(R7)
+        CALL test_px
+        BZ   R2, update_ball
+        ; Only count hits in the target band y >= 36.
+        LDW  R0, 2(R7)
+        LIL  R1, 36
+        SLT  R3, R0, R1
+        BZ   R3, destroy_target
+        JMP  update_ball
+
+destroy_target:
+        LDW  R0, 0(R7)
+        LDW  R1, 2(R7)
+        CALL clr_px
+        LDW  R3, -6(R7)
+        ADDI R3, 10
+        STW  R3, -6(R7)
+        LDW  R3, -2(R7)
+        ADDI R3, -1
+        STW  R3, -2(R7)
+        LDW  R3, -10(R7)
+        NOT  R3, R3
+        ADDI R3, 1
+        STW  R3, -10(R7)
+        LDW  R3, -2(R7)
+        BZ   R3, win_game
+
+; Update ball position: erase old pixel, store new coordinates, draw new.
+update_ball:
+        LDW  R0, -16(R7)
+        LDW  R1, -14(R7)
+        CALL clr_px
+        LDW  R0, 0(R7)
+        STW  R0, -16(R7)
+        LDW  R1, 2(R7)
+        STW  R1, -14(R7)
+        CALL set_px
+        CALL frame_delay
+        JMP  main
+
+; Life lost: reduce lives, reset ball to center and keep paddle.
+lose_life:
+        LDW  R3, -4(R7)
+        ADDI R3, -1
+        STW  R3, -4(R7)
+        BZ   R3, game_over
+        ; Remove the ball's previous pixel before resetting it.
+        LDW  R0, -16(R7)
+        LDW  R1, -14(R7)
+        CALL clr_px
+        ; Reset ball position and direction
+        LIL  R0, 32
+        STW  R0, -16(R7)
+        LIL  R0, 18
+        STW  R0, -14(R7)
+        LIL  R0, 1
+        STW  R0, -12(R7)
+        STW  R0, -10(R7)
+        LIL  R0, 32
+        LIL  R1, 18
+        CALL set_px
+        CALL frame_delay
+        JMP  main
+
+win_game:
+; Win marker: draw a horizontal line near the top, then halt.
+        LIL  R0, 12
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 13
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 14
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 15
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 16
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 17
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 18
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 19
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 20
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 21
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 22
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 23
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 24
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 25
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 26
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 27
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 28
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 29
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 30
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 31
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 32
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 33
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 34
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 35
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 36
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 37
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 38
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 39
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 40
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 41
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 42
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 43
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 44
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 45
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 46
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 47
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 48
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 49
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 50
+        LIL  R1, 62
+        CALL set_px
+        LIL  R0, 51
+        LIL  R1, 62
+        CALL set_px
+        JMP  game_over
+
+game_over:
+        HLT
+
+; =====================================================================
+; FRAME DELAY
+; Limits game-loop speed so a held arrow key moves the paddle smoothly
+; instead of racing across the screen. Tune the initial count if needed.
+; Clobbers R3 only.
+; =====================================================================
+frame_delay:
+        LIL  R3, 40
+frame_delay_loop:
+        ADDI R3, -1
+        BZ   R3, frame_delay_done
+        JMP  frame_delay_loop
+frame_delay_done:
+        RET
+
+; =====================================================================
+; PIXEL HELPERS
+; In: R0=x, R1=y. Preserve R0/R1. Clobber R2-R5. R6 is link register.
+; Address = 0x0600 + y*8 + x/8; mask = 0x80 >> (x&7)
+; =====================================================================
+set_px:
+        MOV  R2, R1
+        SHL  R2, 3
+        MOV  R3, R0
+        SHR  R3, 3
+        ADD  R2, R2, R3
+        LIL  R3, 0x00
+        LIH  R3, 0x06
+        ADD  R2, R2, R3
+        MOV  R3, R0
+        LIL  R4, 7
+        AND  R3, R3, R4
+        LIL  R4, 0x20
+        LIH  R4, 0x04
+        ADD  R4, R4, R3
+        LDB  R5, 0(R4)
+        LDB  R3, 0(R2)
+        OR   R3, R3, R5
+        STB  R3, 0(R2)
+        RET
+
+clr_px:
+        MOV  R2, R1
+        SHL  R2, 3
+        MOV  R3, R0
+        SHR  R3, 3
+        ADD  R2, R2, R3
+        LIL  R3, 0x00
+        LIH  R3, 0x06
+        ADD  R2, R2, R3
+        MOV  R3, R0
+        LIL  R4, 7
+        AND  R3, R3, R4
+        LIL  R4, 0x20
+        LIH  R4, 0x04
+        ADD  R4, R4, R3
+        LDB  R5, 0(R4)
+        LDB  R3, 0(R2)
+        NOT  R4, R5
+        AND  R3, R3, R4
+        STB  R3, 0(R2)
+        RET
+
+test_px:
+        MOV  R2, R1
+        SHL  R2, 3
+        MOV  R3, R0
+        SHR  R3, 3
+        ADD  R2, R2, R3
+        LIL  R3, 0x00
+        LIH  R3, 0x06
+        ADD  R2, R2, R3
+        MOV  R3, R0
+        LIL  R4, 7
+        AND  R3, R3, R4
+        LIL  R4, 0x20
+        LIH  R4, 0x04
+        ADD  R4, R4, R3
+        LDB  R5, 0(R4)
+        LDB  R3, 0(R2)
+        AND  R3, R3, R5
+        MOV  R2, R3
+        RET
