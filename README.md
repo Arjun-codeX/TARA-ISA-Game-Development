@@ -1,93 +1,81 @@
-# TARA ISA – Game Development Collection
+# TARA ISA
+### Custom Instruction Set Architecture, Assembly Programming and Application Development
 
-### Game Development Using C Programming, TARA ISA and TL-Verilog
-
-## About the Project
-
-This project focuses on developing a collection of 12 games categorized into three difficulty levels: Beginner, Medium and Professional.
-
-The main objective is to explore game design, programming logic, player interactions, enemy behaviour, collision detection and algorithm development using C programming and TARA ISA.
-
-The project also explores hardware-oriented game logic implementation using TL-Verilog.
-
-## Game Collection
-
-### Beginner Level
-
-Games focused on basic programming concepts and game mechanics.
-
-| No. | Game                     | Status  |
-| --- | ------------------------ | ------- |
-| 01  | Snake Game               | Planned |
-| 02  | Tic-Tac-Toe              | Planned |
-| 03  | Pong Game                | Planned |
-| 04  | Catch the Falling Object | Planned |
-
-### Medium Level
-
-Games involving advanced movement, multiple objects and enemy behaviour.
-
-| No. | Game               | Status  |
-| --- | ------------------ | ------- |
-| 05  | Maze Runner        | Planned |
-| 06  | Space Shooter      | Planned |
-| 07  | Pac-Man Style Game | Planned |
-| 08  | Car Racing Game    | Planned |
-
-### Professional Level
-
-Games involving complex algorithms, AI behaviour and advanced game mechanics.
-
-| No. | Game                 | Status  |
-| --- | -------------------- | ------- |
-| 09  | Tower Defense        | Planned |
-| 10  | Chess                | Planned |
-| 11  | Battle Arena         | Planned |
-| 12  | Advanced Maze Escape | Planned |
-
-## Technologies Used
-
-* C Programming
-* TARA ISA
-* TL-Verilog
-* Game Logic Design
-* Algorithm Development
-* Simulation and Testing
-
-## Project Objectives
-
-1. Understand game development from basic to advanced levels.
-2. Develop efficient game logic using C programming.
-3. Explore execution using TARA ISA.
-4. Understand player and enemy movement algorithms.
-5. Explore hardware-oriented design using TL-Verilog.
-6. Document implementation, testing and development progress.
-
-## Repository Structure
-
-```text
-TARA-ISA-Game-Development/
-│
-├── Beginner/
-├── Medium/
-├── Professional/
-├── Documentation/
-├── Screenshots/
-└── README.md
-```
-
-## Development Approach
-
-Each game will include source code, game instructions, implementation details, testing results and screenshots wherever applicable.
-
-## Project Status
-
-Currently under development.
-
-More games and implementation details will be added progressively.
+<p align="center">
+  <b>Learn the Architecture. Understand the Instructions. Build Applications.</b>
+</p>
 
 ---
 
-**Repository:** TARA-ISA-Game-Development
+## About TARA ISA
 
-**Developer:** Arjun45-ECE
+TARA ISA is a custom instruction set architecture explored through
+processor concepts, assembly language programming and practical
+software applications.
+
+This repository aims to provide a structured learning resource
+covering the architecture, instruction set, assembly programming,
+instruction execution and application development.
+
+## Repository Contents
+
+### 01. TARA ISA Documentation
+
+Complete technical documentation covering:
+
+- Introduction to TARA ISA
+- Processor architecture
+- Register organization
+- Instruction set
+- Instruction formats and encoding
+- Assembly language programming
+- Instruction execution
+- Memory organization
+- TARA ISA vs RISC-V
+- Development tools and build process
+
+### 02. Game Development
+
+| Project | Description |
+|---|---|
+| Eleven Towers | Game developed using TARA ISA |
+| Brick Breaker | Classic brick-breaking game |
+
+### 03. Clock Applications
+
+| Project | Description |
+|---|---|
+| Digital Clock | Digital time display |
+| Analog Clock | Clock with hour, minute and second hands |
+
+## Learning Roadmap
+
+1. Understand the fundamentals of TARA ISA.
+2. Explore processor architecture and registers.
+3. Learn the instruction set and instruction formats.
+4. Understand assembly language syntax.
+5. Study instruction execution.
+6. Learn the software development workflow.
+7. Build and execute practical applications.
+
+## Documentation
+
+Explore the [TARA ISA Documentation](01_TARA_ISA_Documentation/).
+
+## Applications
+
+- [Eleven Towers](02_Games/Eleven_Towers/)
+- [Brick Breaker](02_Games/Brick_Breaker/)
+- [Digital Clock](03_Clock_Applications/Digital_Clock/)
+- [Analog Clock](03_Clock_Applications/Analog_Clock/)
+
+## Project Objective
+
+The objective is to understand the relationship between a custom
+instruction set architecture and software applications by studying
+assembly programming and practical implementations.
+
+---
+
+**Project:** TARA ISA  
+**Focus:** Computer Architecture | Assembly Programming | Game Development
