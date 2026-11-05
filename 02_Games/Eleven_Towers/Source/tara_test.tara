@@ -1,0 +1,16 @@
+; TARA16 Assembly Test
+; Calculate Fibonacci F(10) = 55
+
+        LIL  R2, 0
+        LIL  R3, 1
+        LIL  R5, 10
+
+loop:   BZ   R5, done
+        ADD  R4, R2, R3
+        MOV  R2, R3
+        MOV  R3, R4
+        ADDI R5, -1
+        JMP  loop
+
+done:   MOV  R6, R2
+        HLT
