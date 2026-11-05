@@ -1,0 +1,1233 @@
+; ============================================================; ============================================================; ============================================================
+; ELEVEN TOWERS - TARA16
+; TWO PLAYER BOARD WITH FOUR SIX-SIDED DICE
+;
+; DISPLAY: 64 x 64
+; FRAMEBUFFER: 0x0600 - 0x07FF
+;
+; CONTROLS:
+; W = Roll four dice
+; A = Previous tower
+; D = Next tower
+; S = Switch player
+; Q = Quit
+;
+; DICE VALUES: 1, 2, 3, 4, 5, 6
+; ============================================================
+
+    JMP START
+
+; ============================================================
+; SET PIXEL
+; R0 = X, R1 = Y
+; ============================================================
+
+SET_PIXEL:
+    MOV R2, R1
+    SHL R2, 3
+
+    MOV R3, R0
+    SHR R3, 3
+    ADD R2, R2, R3
+
+    LIL R3, 0
+    LIH R3, 0x06
+    ADD R2, R2, R3
+
+    LIL R4, 7
+    AND R3, R0, R4
+
+    LIL R4, 0xD0
+    LIH R4, 0x05
+    ADD R4, R4, R3
+
+    LDB R5, 0(R4)
+    LDB R3, 0(R2)
+
+    OR R3, R3, R5
+    STB R3, 0(R2)
+
+    RET
+
+; ============================================================
+; CLEAR PIXEL
+; ============================================================
+
+CLEAR_PIXEL:
+    MOV R2, R1
+    SHL R2, 3
+
+    MOV R3, R0
+    SHR R3, 3
+    ADD R2, R2, R3
+
+    LIL R3, 0
+    LIH R3, 0x06
+    ADD R2, R2, R3
+
+    LIL R4, 7
+    AND R3, R0, R4
+
+    LIL R4, 0xD0
+    LIH R4, 0x05
+    ADD R4, R4, R3
+
+    LDB R5, 0(R4)
+    LDB R3, 0(R2)
+
+    NOT R5, R5
+    AND R3, R3, R5
+
+    STB R3, 0(R2)
+
+    RET
+
+; ============================================================
+; DRAW TOWER
+; R0 = CENTRE X
+; R1 = NUMBER OF FLOORS
+;
+; SCRATCH:
+; 05A0 = centre X
+; 05A1 = height
+; 05A2 = floor index
+; 05A3 = floor Y
+; 05A4 = current X
+; 05A5 = horizontal counter
+; 05A6 = vertical counter
+; ============================================================
+
+DRAW_TOWER:
+    PUSH R6
+
+    ; Save centre X and number of hollow floors.
+    LIL R4, 0xA0
+    LIH R4, 0x05
+    STB R0, 0(R4)
+    STB R1, 1(R4)
+    LIL R2, 0
+    STB R2, 2(R4)
+
+TOWER_FLOOR:
+    LIL R4, 0xA0
+    LIH R4, 0x05
+
+    ; floor_y = 7 + floor_index * 3
+    LDB R2, 2(R4)
+    MOV R3, R2
+    SHL R3, 1
+    ADD R3, R3, R2
+    ADDI R3, 7
+    STB R3, 3(R4)
+
+    ; Draw top edge (three pixels).
+    LDB R0, 0(R4)
+    ADDI R0, -1
+    LDB R1, 3(R4)
+    LIL R2, 0
+    STB R2, 5(R4)
+
+TOWER_TOP_EDGE:
+    CALL SET_PIXEL
+    LIL R4, 0xA0
+    LIH R4, 0x05
+    LDB R2, 5(R4)
+    ADDI R2, 1
+    STB R2, 5(R4)
+    LIL R3, 3
+    SLT R5, R2, R3
+    BZ R5, TOWER_BOTTOM_START
+    LDB R0, 0(R4)
+    ADDI R0, -1
+    ADD R0, R0, R2
+    LDB R1, 3(R4)
+    JMP TOWER_TOP_EDGE
+
+TOWER_BOTTOM_START:
+    LIL R4, 0xA0
+    LIH R4, 0x05
+    LDB R0, 0(R4)
+    ADDI R0, -1
+    LDB R1, 3(R4)
+    ADDI R1, 2
+    LIL R2, 0
+    STB R2, 5(R4)
+
+TOWER_BOTTOM_EDGE:
+    CALL SET_PIXEL
+    LIL R4, 0xA0
+    LIH R4, 0x05
+    LDB R2, 5(R4)
+    ADDI R2, 1
+    STB R2, 5(R4)
+    LIL R3, 3
+    SLT R5, R2, R3
+    BZ R5, TOWER_SIDE_START
+    LDB R0, 0(R4)
+    ADDI R0, -1
+    ADD R0, R0, R2
+    LDB R1, 3(R4)
+    ADDI R1, 2
+    JMP TOWER_BOTTOM_EDGE
+
+TOWER_SIDE_START:
+    ; Draw the two side pixels in the middle row.
+    LIL R4, 0xA0
+    LIH R4, 0x05
+    LDB R1, 3(R4)
+    ADDI R1, 1
+    LDB R0, 0(R4)
+    ADDI R0, -1
+    CALL SET_PIXEL
+
+    LIL R4, 0xA0
+    LIH R4, 0x05
+    LDB R0, 0(R4)
+    ADDI R0, 1
+    LDB R1, 3(R4)
+    ADDI R1, 1
+    CALL SET_PIXEL
+
+    ; Centre pixel makes this floor SOLID yellow by default.
+    LIL R4, 0xA0
+    LIH R4, 0x05
+    LDB R0, 0(R4)
+    LDB R1, 3(R4)
+    ADDI R1, 1
+    CALL SET_PIXEL
+
+    ; Next floor.
+    LIL R4, 0xA0
+    LIH R4, 0x05
+    LDB R2, 2(R4)
+    ADDI R2, 1
+    STB R2, 2(R4)
+    LDB R1, 1(R4)
+    SLT R3, R2, R1
+    BZ R3, TOWER_DONE
+    JMP TOWER_FLOOR
+
+TOWER_DONE:
+    POP R6
+    RET
+
+; ============================================================
+; DRAW BASE LINE
+; ============================================================
+
+DRAW_BASE:
+    PUSH R6
+
+    LIL R0, 2
+    LIL R1, 5
+
+BASE_LOOP:
+    CALL SET_PIXEL
+
+    ADDI R0, 1
+
+    LIL R2, 58
+    SLT R3, R0, R2
+
+    BZ R3, BASE_DONE
+
+    JMP BASE_LOOP
+
+BASE_DONE:
+    POP R6
+    RET
+
+; ============================================================
+; DRAW PLAYER MARKERS
+;
+; 0580 = Player 1 selected tower
+; 0581 = Player 2 selected tower
+; 0582 = Active player
+; 0583 = Keyboard input
+; 0584 = Player 1 marker X
+; 0585 = Player 2 marker X
+; ============================================================
+
+DRAW_MARKERS:
+    PUSH R6
+
+    LIL R4, 0x80
+    LIH R4, 0x05
+
+    LDB R0, 0(R4)
+
+    MOV R1, R0
+    SHL R0, 2
+    ADD R0, R0, R1
+    ADDI R0, 4
+
+    STB R0, 4(R4)
+
+    LIL R1, 2
+    CALL SET_PIXEL
+
+    LIL R4, 0x80
+    LIH R4, 0x05
+
+    LDB R0, 1(R4)
+
+    MOV R1, R0
+    SHL R0, 2
+    ADD R0, R0, R1
+    ADDI R0, 4
+
+    STB R0, 5(R4)
+
+    LIL R1, 4
+    CALL SET_PIXEL
+
+    POP R6
+    RET
+
+; ============================================================
+; MOVE LEFT
+; ============================================================
+
+MOVE_LEFT:
+    LIL R4, 0x80
+    LIH R4, 0x05
+
+    LDB R1, 2(R4)
+    ADD R4, R4, R1
+
+    LDB R0, 0(R4)
+
+    BZ R0, LEFT_DONE
+
+    ADDI R0, -1
+    STB R0, 0(R4)
+
+LEFT_DONE:
+    RET
+
+; ============================================================
+; MOVE RIGHT
+; ============================================================
+
+MOVE_RIGHT:
+    LIL R4, 0x80
+    LIH R4, 0x05
+
+    LDB R1, 2(R4)
+    ADD R4, R4, R1
+
+    LDB R0, 0(R4)
+
+    LIL R1, 10
+    SLT R2, R0, R1
+
+    BZ R2, RIGHT_DONE
+
+    ADDI R0, 1
+    STB R0, 0(R4)
+
+RIGHT_DONE:
+    RET
+
+; ============================================================
+; SWITCH PLAYER
+; ============================================================
+
+SWITCH_PLAYER:
+    LIL R4, 0x80
+    LIH R4, 0x05
+
+    LDB R0, 2(R4)
+
+    LIL R1, 1
+    SUB R0, R1, R0
+
+    STB R0, 2(R4)
+
+    RET
+
+; ============================================================
+; DICE MEMORY
+;
+; 0590 = Die 1
+; 0591 = Die 2
+; 0592 = Die 3
+; 0593 = Die 4
+;
+; DICE DRAWING SCRATCH:
+; 05B0 = Die base X
+; 05B1 = Die base Y
+; 05B2 = Die value
+; 05B3 = Local Y / loop counter
+; 05B4 = Local X / loop counter
+; ============================================================
+
+; ============================================================
+; INITIALIZE FOUR DICE
+; ============================================================
+
+INIT_DICE:
+    LIL R4, 0x90
+    LIH R4, 0x05
+
+    LIL R0, 1
+    STB R0, 0(R4)
+
+    LIL R0, 2
+    STB R0, 1(R4)
+
+    LIL R0, 3
+    STB R0, 2(R4)
+
+    LIL R0, 4
+    STB R0, 3(R4)
+
+    RET
+
+; ============================================================
+; ROLL FOUR DICE
+; Each die advances from 1 to 6 and wraps to 1.
+; This is a demonstration sequence, not random generation.
+; ============================================================
+
+ROLL_DICE:
+    PUSH R6
+
+    LIL R4, 0x90
+    LIH R4, 0x05
+
+    ; DIE 1
+
+    LDB R0, 0(R4)
+    ADDI R0, 1
+
+    LIL R1, 7
+    SLT R2, R0, R1
+
+    BZ R2, DICE_ONE_WRAP
+
+    JMP DICE_ONE_SAVE
+
+DICE_ONE_WRAP:
+    LIL R0, 1
+
+DICE_ONE_SAVE:
+    STB R0, 0(R4)
+
+    ; DIE 2
+
+    LDB R0, 1(R4)
+    ADDI R0, 1
+
+    LIL R1, 7
+    SLT R2, R0, R1
+
+    BZ R2, DICE_TWO_WRAP
+
+    JMP DICE_TWO_SAVE
+
+DICE_TWO_WRAP:
+    LIL R0, 1
+
+DICE_TWO_SAVE:
+    STB R0, 1(R4)
+
+    ; DIE 3
+
+    LDB R0, 2(R4)
+    ADDI R0, 1
+
+    LIL R1, 7
+    SLT R2, R0, R1
+
+    BZ R2, DICE_THREE_WRAP
+
+    JMP DICE_THREE_SAVE
+
+DICE_THREE_WRAP:
+    LIL R0, 1
+
+DICE_THREE_SAVE:
+    STB R0, 2(R4)
+
+    ; DIE 4
+
+    LDB R0, 3(R4)
+    ADDI R0, 1
+
+    LIL R1, 7
+    SLT R2, R0, R1
+
+    BZ R2, DICE_FOUR_WRAP
+
+    JMP DICE_FOUR_SAVE
+
+DICE_FOUR_WRAP:
+    LIL R0, 1
+
+DICE_FOUR_SAVE:
+    STB R0, 3(R4)
+
+    CALL DRAW_FOUR_DICE
+    CALL CLIMB_FROM_DICE
+
+    POP R6
+    RET
+
+; ============================================================
+; CLIMB LOGIC
+; 0594..059E = progress for towers 2..12
+; One completed floor is shown by clearing its centre pixel.
+; R0 = tower number (2..12)
+; ============================================================
+
+CLIMB_ONE:
+    PUSH R6
+
+    ; Save tower number and calculate progress-array index.
+    LIL R4, 0xA7
+    LIH R4, 0x05
+    STB R0, 0(R4)
+    ADDI R0, -2
+    STB R0, 1(R4)
+
+    ; Calculate tower height: n+1 for n<=7, otherwise 15-n.
+    LIL R1, 5
+    SLT R2, R1, R0
+    ; R0 is index (n-2), so n<=7 means index<=5.
+    BZ R2, CLIMB_HEIGHT_ASC
+    LDB R0, 0(R4)
+    LIL R1, 15
+    SUB R1, R1, R0
+    JMP CLIMB_HEIGHT_SAVE
+
+CLIMB_HEIGHT_ASC:
+    LDB R0, 0(R4)
+    ADDI R0, 1
+    MOV R1, R0
+
+CLIMB_HEIGHT_SAVE:
+    STB R1, 2(R4)
+
+    ; Load current progress.
+    LDB R0, 1(R4)
+    LIL R1, 0x94
+    LIH R1, 0x05
+    ADD R1, R1, R0
+    LDB R2, 0(R1)
+    STB R2, 3(R4)
+
+    ; Stop if this tower is already full.
+    LDB R3, 2(R4)
+    SLT R5, R2, R3
+    BZ R5, CLIMB_DONE
+
+    ; x = 4 + index*5
+    LDB R0, 1(R4)
+    MOV R1, R0
+    SHL R0, 2
+    ADD R0, R0, R1
+    ADDI R0, 4
+    STB R0, 4(R4)
+
+    ; y = 8 + progress*3 (bottom floor first).
+    LDB R1, 3(R4)
+    MOV R2, R1
+    SHL R1, 1
+    ADD R1, R1, R2
+    ADDI R1, 8
+    STB R1, 5(R4)
+
+    ; Turn the solid floor into a hollow floor.
+    LDB R0, 4(R4)
+    LDB R1, 5(R4)
+    CALL CLEAR_PIXEL
+
+    ; Increment saved progress.
+    LIL R4, 0xA7
+    LIH R4, 0x05
+    LDB R0, 1(R4)
+    LIL R1, 0x94
+    LIH R1, 0x05
+    ADD R1, R1, R0
+    LDB R2, 0(R1)
+    ADDI R2, 1
+    STB R2, 0(R1)
+
+CLIMB_DONE:
+    POP R6
+    RET
+
+; Apply two pair sums:
+; Tower A = die1 + die2
+; Tower B = die3 + die4
+CLIMB_FROM_DICE:
+    PUSH R6
+
+    LIL R4, 0x90
+    LIH R4, 0x05
+    LDB R0, 0(R4)
+    LDB R1, 1(R4)
+    ADD R0, R0, R1
+    CALL CLIMB_ONE
+
+    LIL R4, 0x90
+    LIH R4, 0x05
+    LDB R0, 2(R4)
+    LDB R1, 3(R4)
+    ADD R0, R0, R1
+    CALL CLIMB_ONE
+
+    POP R6
+    RET
+
+; ============================================================
+; DIE PIXEL
+; R0 = LOCAL X
+; R1 = LOCAL Y
+;
+; Adds die base coordinates and draws one pixel.
+; ============================================================
+
+DIE_PIXEL:
+    PUSH R6
+
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    LDB R2, 0(R4)
+    LDB R3, 1(R4)
+
+    ADD R0, R0, R2
+    ADD R1, R1, R3
+
+    CALL SET_PIXEL
+
+    POP R6
+    RET
+
+; ============================================================
+; DRAW ONE DIE
+;
+; R0 = BASE X
+; R1 = BASE Y
+; R2 = VALUE (1-6)
+; ============================================================
+
+DRAW_DIE:
+    PUSH R6
+
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    STB R0, 0(R4)
+    STB R1, 1(R4)
+    STB R2, 2(R4)
+
+    ; CLEAR THE PREVIOUS DIE
+
+    LIL R2, 0
+    STB R2, 3(R4)
+
+DIE_CLEAR_Y:
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    LIL R2, 0
+    STB R2, 4(R4)
+
+DIE_CLEAR_X:
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    LDB R0, 0(R4)
+    LDB R2, 4(R4)
+    ADD R0, R0, R2
+
+    LDB R1, 1(R4)
+    LDB R3, 3(R4)
+    ADD R1, R1, R3
+
+    CALL CLEAR_PIXEL
+
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    LDB R2, 4(R4)
+    ADDI R2, 1
+    STB R2, 4(R4)
+
+    LIL R3, 7
+    SLT R5, R2, R3
+
+    BZ R5, DIE_CLEAR_NEXT_ROW
+
+    JMP DIE_CLEAR_X
+
+DIE_CLEAR_NEXT_ROW:
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    LDB R2, 3(R4)
+    ADDI R2, 1
+    STB R2, 3(R4)
+
+    LIL R3, 7
+    SLT R5, R2, R3
+
+    BZ R5, DIE_DRAW_BORDER
+
+    JMP DIE_CLEAR_Y
+
+; ============================================================
+; DRAW DIE BORDER
+; ============================================================
+
+DIE_DRAW_BORDER:
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    LIL R2, 0
+    STB R2, 3(R4)
+
+DIE_TOP_BOTTOM:
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    LDB R0, 3(R4)
+    LIL R1, 0
+    CALL DIE_PIXEL
+
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    LDB R0, 3(R4)
+    LIL R1, 6
+    CALL DIE_PIXEL
+
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    LDB R2, 3(R4)
+    ADDI R2, 1
+    STB R2, 3(R4)
+
+    LIL R3, 7
+    SLT R5, R2, R3
+
+    BZ R5, DIE_SIDE_START
+
+    JMP DIE_TOP_BOTTOM
+
+DIE_SIDE_START:
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    LIL R2, 1
+    STB R2, 3(R4)
+
+DIE_SIDE_LOOP:
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    LIL R0, 0
+    LDB R1, 3(R4)
+    CALL DIE_PIXEL
+
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    LIL R0, 6
+    LDB R1, 3(R4)
+    CALL DIE_PIXEL
+
+    LIL R4, 0xB0
+    LIH R4, 0x05
+
+    LDB R2, 3(R4)
+    ADDI R2, 1
+    STB R2, 3(R4)
+
+    LIL R3, 6
+    SLT R5, R2, R3
+
+    BZ R5, DIE_DRAW_PIPS
+
+    JMP DIE_SIDE_LOOP
+
+; ============================================================
+; DRAW DICE PIPS
+;
+; 1 = centre
+; 2 = diagonal pair
+; 3 = diagonal pair + centre
+; 4 = four corners
+; 5 = four corners + centre
+; 6 = four corners + two middle dots
+; ============================================================
+
+; ============================================================
+; DRAW NUMBER ON DIE - 3 x 5 PIXEL FONT
+; ============================================================
+DIE_DRAW_PIPS:
+    LIL R4, 0xB0
+    LIH R4, 0x05
+    LDB R2, 2(R4)
+
+    ; One pip: centre.
+    LIL R3, 1
+    SUB R5, R2, R3
+    BZ R5, PIPS_ONE
+
+    ; Two pips: diagonal.
+    LIL R3, 2
+    SUB R5, R2, R3
+    BZ R5, PIPS_TWO
+
+    ; Three pips: diagonal plus centre.
+    LIL R3, 3
+    SUB R5, R2, R3
+    BZ R5, PIPS_THREE
+
+    ; Four pips: four corners.
+    LIL R3, 4
+    SUB R5, R2, R3
+    BZ R5, PIPS_FOUR
+
+    ; Five pips: four corners plus centre.
+    LIL R3, 5
+    SUB R5, R2, R3
+    BZ R5, PIPS_FIVE
+
+    JMP PIPS_SIX
+
+PIPS_ONE:
+    LIL R0, 3
+    LIL R1, 3
+    CALL DIE_PIXEL
+    JMP DIE_FINISH
+
+PIPS_TWO:
+    LIL R0, 2
+    LIL R1, 2
+    CALL DIE_PIXEL
+    LIL R0, 4
+    LIL R1, 4
+    CALL DIE_PIXEL
+    JMP DIE_FINISH
+
+PIPS_THREE:
+    LIL R0, 2
+    LIL R1, 2
+    CALL DIE_PIXEL
+    LIL R0, 3
+    LIL R1, 3
+    CALL DIE_PIXEL
+    LIL R0, 4
+    LIL R1, 4
+    CALL DIE_PIXEL
+    JMP DIE_FINISH
+
+PIPS_FOUR:
+    LIL R0, 2
+    LIL R1, 2
+    CALL DIE_PIXEL
+    LIL R0, 4
+    LIL R1, 2
+    CALL DIE_PIXEL
+    LIL R0, 2
+    LIL R1, 4
+    CALL DIE_PIXEL
+    LIL R0, 4
+    LIL R1, 4
+    CALL DIE_PIXEL
+    JMP DIE_FINISH
+
+PIPS_FIVE:
+    LIL R0, 2
+    LIL R1, 2
+    CALL DIE_PIXEL
+    LIL R0, 4
+    LIL R1, 2
+    CALL DIE_PIXEL
+    LIL R0, 3
+    LIL R1, 3
+    CALL DIE_PIXEL
+    LIL R0, 2
+    LIL R1, 4
+    CALL DIE_PIXEL
+    LIL R0, 4
+    LIL R1, 4
+    CALL DIE_PIXEL
+    JMP DIE_FINISH
+
+PIPS_SIX:
+    LIL R0, 2
+    LIL R1, 2
+    CALL DIE_PIXEL
+    LIL R0, 4
+    LIL R1, 2
+    CALL DIE_PIXEL
+    LIL R0, 2
+    LIL R1, 3
+    CALL DIE_PIXEL
+    LIL R0, 4
+    LIL R1, 3
+    CALL DIE_PIXEL
+    LIL R0, 2
+    LIL R1, 4
+    CALL DIE_PIXEL
+    LIL R0, 4
+    LIL R1, 4
+    CALL DIE_PIXEL
+    JMP DIE_FINISH
+
+DIE_FINISH:
+    POP R6
+    RET
+
+; ============================================================
+; DRAW FOUR DICE
+;
+; Positions:
+; Die 1: X=4
+; Die 2: X=18
+; Die 3: X=32
+; Die 4: X=46
+; Y=52
+; ============================================================
+
+DRAW_FOUR_DICE:
+    PUSH R6
+
+    LIL R4, 0x90
+    LIH R4, 0x05
+
+    ; DIE 1
+
+    LIL R0, 4
+    LIL R1, 52
+    LDB R2, 0(R4)
+    CALL DRAW_DIE
+
+    ; DIE 2
+
+    LIL R4, 0x90
+    LIH R4, 0x05
+
+    LIL R0, 18
+    LIL R1, 52
+    LDB R2, 1(R4)
+    CALL DRAW_DIE
+
+    ; DIE 3
+
+    LIL R4, 0x90
+    LIH R4, 0x05
+
+    LIL R0, 32
+    LIL R1, 52
+    LDB R2, 2(R4)
+    CALL DRAW_DIE
+
+    ; DIE 4
+
+    LIL R4, 0x90
+    LIH R4, 0x05
+
+    LIL R0, 46
+    LIL R1, 52
+    LDB R2, 3(R4)
+    CALL DRAW_DIE
+
+    POP R6
+    RET
+
+; ============================================================
+; DELAY
+; ============================================================
+
+DELAY:
+    LIL R0, 0xFF
+    LIH R0, 0x0F
+
+DELAY_LOOP:
+    ADDI R0, -1
+
+    BZ R0, DELAY_DONE
+
+    JMP DELAY_LOOP
+
+DELAY_DONE:
+    RET
+
+; ============================================================
+; MAIN PROGRAM
+; ============================================================
+
+START:
+
+    ; INITIALIZE STACK
+
+    LIL R7, 0xF0
+    LIH R7, 0x05
+
+    ; CLEAR FRAMEBUFFER
+
+    LIL R0, 0
+    LIH R0, 0x06
+
+    LIL R1, 0
+    LIH R1, 2
+
+    LIL R2, 0
+
+CLEAR_SCREEN:
+    STB R2, 0(R0)
+
+    ADDI R0, 1
+    ADDI R1, -1
+
+    BZ R1, SCREEN_READY
+
+    JMP CLEAR_SCREEN
+
+SCREEN_READY:
+
+    ; PIXEL MASK TABLE AT 0x05D0 (OUTSIDE PROGRAM CODE)
+
+    LIL R0, 0xD0
+    LIH R0, 0x05
+
+    LIL R2, 0x80
+    STB R2, 0(R0)
+
+    LIL R2, 0x40
+    STB R2, 1(R0)
+
+    LIL R2, 0x20
+    STB R2, 2(R0)
+
+    LIL R2, 0x10
+    STB R2, 3(R0)
+
+    LIL R2, 0x08
+    STB R2, 4(R0)
+
+    LIL R2, 0x04
+    STB R2, 5(R0)
+
+    LIL R2, 0x02
+    STB R2, 6(R0)
+
+    LIL R2, 0x01
+    STB R2, 7(R0)
+
+    ; INITIALIZE PLAYER VARIABLES
+
+    LIL R4, 0x80
+    LIH R4, 0x05
+
+    LIL R0, 5
+    STB R0, 0(R4)
+    STB R0, 1(R4)
+
+    LIL R0, 0
+    STB R0, 2(R4)
+    STB R0, 3(R4)
+
+    LIL R0, 30
+    STB R0, 4(R4)
+    STB R0, 5(R4)
+
+    ; PREVIOUS KEYBOARD STATE (0x0586) = 0
+    LIL R4, 0x86
+    LIH R4, 0x05
+    LIL R0, 0
+    STB R0, 0(R4)
+
+    ; INITIALIZE TOWER CLIMB COUNTERS (towers 2 through 12)
+    LIL R4, 0x94
+    LIH R4, 0x05
+    LIL R0, 0
+    LIL R1, 11
+INIT_CLIMB_COUNTERS:
+    STB R0, 0(R4)
+    ADDI R4, 1
+    ADDI R1, -1
+    BZ R1, INIT_CLIMB_DONE
+    JMP INIT_CLIMB_COUNTERS
+INIT_CLIMB_DONE:
+
+    ; INITIALIZE DICE
+    CALL INIT_DICE
+
+; ============================================================
+; DRAW BOARD
+; ============================================================
+
+    CALL DRAW_BASE
+
+    LIL R0, 4
+    LIL R1, 3
+    CALL DRAW_TOWER
+
+    LIL R0, 9
+    LIL R1, 4
+    CALL DRAW_TOWER
+
+    LIL R0, 14
+    LIL R1, 5
+    CALL DRAW_TOWER
+
+    LIL R0, 19
+    LIL R1, 6
+    CALL DRAW_TOWER
+
+    LIL R0, 24
+    LIL R1, 7
+    CALL DRAW_TOWER
+
+    LIL R0, 29
+    LIL R1, 8
+    CALL DRAW_TOWER
+
+    LIL R0, 34
+    LIL R1, 7
+    CALL DRAW_TOWER
+
+    LIL R0, 39
+    LIL R1, 6
+    CALL DRAW_TOWER
+
+    LIL R0, 44
+    LIL R1, 5
+    CALL DRAW_TOWER
+
+    LIL R0, 49
+    LIL R1, 4
+    CALL DRAW_TOWER
+
+    LIL R0, 54
+    LIL R1, 3
+    CALL DRAW_TOWER
+
+    CALL DRAW_MARKERS
+
+    ; DRAW INITIAL FOUR DICE
+
+    CALL DRAW_FOUR_DICE
+
+; ============================================================
+; MAIN KEYBOARD LOOP
+; ============================================================
+
+MAIN_LOOP:
+
+    ; Read keyboard continuously. Do not delay before sampling,
+    ; otherwise a short W press may be missed.
+    LIL R0, 0xFF
+    LIH R0, 0x05
+    LDB R1, 0(R0)
+
+    ; Save current input at 0x0583 for the other controls.
+    LIL R4, 0x80
+    LIH R4, 0x05
+    STB R1, 3(R4)
+
+    ; Also save a copy at 0x0587 until this loop finishes.
+    LIL R4, 0x87
+    LIH R4, 0x05
+    STB R1, 0(R4)
+
+    ; QUIT - Q (bit 4)
+    LIL R2, 0x10
+    AND R3, R1, R2
+    BZ R3, CHECK_ROLL
+    HLT
+
+; ============================================================
+; ROLL DICE - W
+; Roll once on each new W key press (rising edge).
+; A held key will not repeatedly roll; release and press again.
+; ============================================================
+
+CHECK_ROLL:
+    LIL R4, 0x80
+    LIH R4, 0x05
+    LDB R1, 3(R4)          ; current keyboard byte
+
+    LIL R4, 0x86
+    LIH R4, 0x05
+    LDB R5, 0(R4)          ; previous keyboard byte
+
+    LIL R2, 0x01
+    AND R3, R1, R2         ; current W bit
+    AND R0, R5, R2         ; previous W bit
+
+    BZ R0, CHECK_NEW_W
+    JMP CHECK_LEFT         ; key was already down
+
+CHECK_NEW_W:
+    BZ R3, CHECK_LEFT      ; W is not pressed
+    CALL ROLL_DICE         ; new W press: advance all four dice
+
+; ============================================================
+; MOVE LEFT - A
+; ============================================================
+
+CHECK_LEFT:
+    LIL R4, 0x80
+    LIH R4, 0x05
+    LDB R1, 3(R4)
+
+    LIL R2, 0x04
+    AND R3, R1, R2
+    BZ R3, CHECK_RIGHT
+
+    CALL MOVE_LEFT
+    CALL DRAW_MARKERS
+
+; ============================================================
+; MOVE RIGHT - D
+; ============================================================
+
+CHECK_RIGHT:
+    LIL R4, 0x80
+    LIH R4, 0x05
+    LDB R1, 3(R4)
+
+    LIL R2, 0x08
+    AND R3, R1, R2
+    BZ R3, CHECK_SWITCH
+
+    CALL MOVE_RIGHT
+    CALL DRAW_MARKERS
+
+; ============================================================
+; SWITCH PLAYER - S
+; ============================================================
+
+CHECK_SWITCH:
+    LIL R4, 0x80
+    LIH R4, 0x05
+    LDB R1, 3(R4)
+
+    LIL R2, 0x02
+    AND R3, R1, R2
+    BZ R3, SAVE_KEY_STATE
+
+    CALL SWITCH_PLAYER
+    CALL DRAW_MARKERS
+
+SAVE_KEY_STATE:
+    ; Remember the sampled key state for edge detection next loop.
+    LIL R4, 0x87
+    LIH R4, 0x05
+    LDB R1, 0(R4)
+
+    LIL R4, 0x86
+    LIH R4, 0x05
+    STB R1, 0(R4)
+
+    JMP MAIN_LOOP
